@@ -219,7 +219,7 @@ async function scan() {
   const password = core.getInput('pcc_pass');
   const imageName = core.getInput('image_name');
   const containerized = core.getInput('containerized').toLowerCase();
-  const dockerAddress = core.getInput('docker_address') || process.env.DOCKER_ADDRESS;
+  const dockerAddress = core.getInput('docker_address') || process.env.DOCKER_ADDRESS || process.env.DOCKER_HOST;
   const dockerTlsCaCert = core.getInput('docker_tlscacert');
   const dockerTlsCert = core.getInput('docker_tlscert');
   const dockerTlsKey = core.getInput('docker_tlskey');
