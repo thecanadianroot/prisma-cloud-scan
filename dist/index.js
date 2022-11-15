@@ -13971,17 +13971,32 @@ function joinUrlPath(...parts) {
     return '/' + parts.filter(part => part !== '/').map(part => part.replace(/(^\/|\/$)/g, '')).join('/');
 }
 
+function getAxiosProxyConf(httpProxy) {
+    if (httpProxy) {
+        return {
+            host: httpProxy.host,
+            port: httpProxy.path,
+            protocol: httpProxy.protocol,
+            auth: {
+                username: httpProxy.username,
+                password: httpProxy.password
+            }
+        };
+    }
+    return undefined;
+}
+
 // Wrapper around 'authenticate' Console API endpoint
-async function authenticate(url, user, pass) {
-  let parsedUrl;
-  try {
-    parsedUrl = new URL(url);
-  } catch (err) {
-    console.log(`Invalid Console address: ${url}`);
-    process.exit(1);
-  }
-  const endpoint = '/api/v1/authenticate';
-  parsedUrl.pathname = joinUrlPath(parsedUrl.pathname, endpoint);
+async function authenticate(url, user, pass, httpProxy) {
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(url);
+    } catch (err) {
+        console.log(`Invalid Console address: ${url}`);
+        process.exit(1);
+    }
+    const endpoint = '/api/v1/authenticate';
+    parsedUrl.pathname = joinUrlPath(parsedUrl.pathname, endpoint);
 
     try {
         const res = await axios({
@@ -13994,6 +14009,7 @@ async function authenticate(url, user, pass) {
                 username: user,
                 password: pass,
             },
+            proxy: getAxiosProxyConf(httpProxy)
         });
         return res.data.token;
     } catch (err) {
@@ -14003,30 +14019,31 @@ async function authenticate(url, user, pass) {
 }
 
 // Wrapper around 'version' Console API endpoint
-async function getVersion(url, token) {
-  let parsedUrl;
-  try {
-    parsedUrl = new URL(url);
-  } catch (err) {
-    console.log(`Invalid Console address: ${url}`);
-    process.exit(1);
-  }
-  const endpoint = '/api/v1/version';
-  parsedUrl.pathname = joinUrlPath(parsedUrl.pathname, endpoint);
+async function getVersion(url, token, httpProxy) {
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(url);
+    } catch (err) {
+        console.log(`Invalid Console address: ${url}`);
+        process.exit(1);
+    }
+    const endpoint = '/api/v1/version';
+    parsedUrl.pathname = joinUrlPath(parsedUrl.pathname, endpoint);
 
-  try {
-    const res = await axios({
-      method: 'get',
-      url: parsedUrl.toString(),
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-    return res.data;
-  } catch (err) {
-    core.setFailed(`Failed getting version: ${err.message}`);
-    process.exit(1);
-  }
+    try {
+        const res = await axios({
+            method: 'get',
+            url: parsedUrl.toString(),
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+            proxy: getAxiosProxyConf(httpProxy)
+        });
+        return res.data;
+    } catch (err) {
+        core.setFailed(`Failed getting version: ${err.message}`);
+        process.exit(1);
+    }
 }
 
 // GitHub Action-specific wrapper around 'util/twistcli' Console API endpoint
@@ -14167,16 +14184,27 @@ function formatSarif(twistcliVersion, resultsFile) {
 }
 
 async function scan() {
-  const httpProxy = process.env.https_proxy || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.HTTP_PROXY;
-  const consoleUrl = core.getInput('pcc_console_url');
-  const username = core.getInput('pcc_user');
-  const password = core.getInput('pcc_pass');
-  const imageName = core.getInput('image_name');
-  const containerized = core.getInput('containerized').toLowerCase();
-  const dockerAddress = core.getInput('docker_address') || process.env.DOCKER_ADDRESS || process.env.DOCKER_HOST;
-  const dockerTlsCaCert = core.getInput('docker_tlscacert');
-  const dockerTlsCert = core.getInput('docker_tlscert');
-  const dockerTlsKey = core.getInput('docker_tlskey');
+    const httpProxy = (() => {
+        let p = process.env.https_proxy || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.HTTP_PROXY;
+        if (p) {
+            try {
+                return new URL(p);
+            } catch (e) {
+                core.setFailed(`Invalid HTTP proxy URL: ${p}`);
+                process.exit(1);
+            }
+        }
+        return p;
+    })();
+    const consoleUrl = core.getInput('pcc_console_url');
+    const username = core.getInput('pcc_user');
+    const password = core.getInput('pcc_pass');
+    const imageName = core.getInput('image_name');
+    const containerized = core.getInput('containerized').toLowerCase();
+    const dockerAddress = core.getInput('docker_address') || process.env.DOCKER_ADDRESS || process.env.DOCKER_HOST;
+    const dockerTlsCaCert = core.getInput('docker_tlscacert');
+    const dockerTlsCert = core.getInput('docker_tlscert');
+    const dockerTlsKey = core.getInput('docker_tlskey');
 
     const resultsFile = core.getInput('results_file');
     const sarifFile = core.getInput('sarif_file');
